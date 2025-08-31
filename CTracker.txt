@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Food Calorie Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the loader */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Hide scrollbar for video container */
+        .video-container::-webkit-scrollbar {
+            display: none;
+        }
+        .video-container {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex flex-col min-h-screen">
+
+    <main class="flex-grow container mx-auto p-4 max-w-2xl">
+        <div class="bg-white rounded-2xl shadow-lg p-6 md:p-8">
+            <header class="text-center mb-6">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-900">AI Calorie Tracker</h1>
+                <p class="text-gray-500 mt-2">Snap a photo of your meal and let AI do the rest!</p>
+            </header>
+
+            <!-- Input Section -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <label for="imageUpload" class="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-transform transform hover:scale-105">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                    <span>Upload Image</span>
+                </label>
+                <input type="file" id="imageUpload" class="hidden" accept="image/*">
+                <button id="cameraButton" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-transform transform hover:scale-105">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                    <span>Use Camera</span>
+                </button>
+            </div>
+
+            <!-- Image Preview & Camera -->
+            <div id="imagePreviewContainer" class="hidden my-4 text-center">
+                 <img id="imagePreview" src="#" alt="Image Preview" class="max-w-full max-h-72 mx-auto rounded-lg shadow-md">
+            </div>
+
+            <div id="cameraContainer" class="hidden my-4 video-container">
+                <video id="videoElement" autoplay playsinline class="w-full rounded-lg shadow-md"></video>
+                <canvas id="canvasElement" class="hidden"></canvas>
+                <div class="flex justify-center mt-4">
+                    <button id="captureButton" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-full transition-transform transform hover:scale-110 shadow-lg">
+                        Capture
+                    </button>
+                </div>
+            </div>
+
+            <!-- Result Section -->
+            <div id="resultContainer" class="hidden mt-6">
+                <h2 class="text-2xl font-bold text-center mb-4">Analysis Result</h2>
+                <div id="loader" class="loader mx-auto my-4 hidden"></div>
+                <div id="resultContent" class="bg-gray-100 p-6 rounded-lg shadow-inner">
+                    <!-- Dynamic content will be injected here -->
+                </div>
+            </div>
+            
+             <!-- Daily Total Section -->
+            <div id="dailyTotalContainer" class="mt-8 bg-indigo-100 p-5 rounded-lg text-center shadow-inner">
+                <h3 class="text-xl font-semibold text-indigo-800">Today's Total</h3>
+                <p id="totalCalories" class="text-4xl font-bold text-indigo-900 mt-2">0</p>
+                <p class="text-indigo-600">calories</p>
+            </div>
+
+            <!-- History Section -->
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-center mb-4">Calorie History</h2>
+                <div id="historyContainer" class="space-y-4">
+                    <p id="historyPlaceholder" class="text-center text-gray-500">No entries yet. Add your first meal to get started!</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Error Modal -->
+    <div id="errorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-6 shadow-xl max-w-sm w-full">
+            <h4 class="text-xl font-bold text-red-600 mb-2">Error</h4>
+            <p id="errorMessage" class="text-gray-700 mb-4">Something went wrong.</p>
+            <button id="closeModalButton" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">Close</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // DOM Elements
+        const imageUpload = document.getElementById('imageUpload');
+        const cameraButton = document.getElementById('cameraButton');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const cameraContainer = document.getElementById('cameraContainer');
+        const videoElement = document.getElementById('videoElement');
+        const canvasElement = document.getElementById('canvasElement');
+        const captureButton = document.getElementById('captureButton');
+        const resultContainer = document.getElementById('resultContainer');
+        const loader = document.getElementById('loader');
+        const resultContent = document.getElementById('resultContent');
+        const dailyTotalContainer = document.getElementById('dailyTotalContainer');
+        const totalCalories = document.getElementById('totalCalories');
+        const historyContainer = document.getElementById('historyContainer');
+        const historyPlaceholder = document.getElementById('historyPlaceholder');
+        const errorModal = document.getElementById('errorModal');
+        const errorMessage = document.getElementById('errorMessage');
+        const closeModalButton = document.getElementById('closeModalButton');
+
+        // App State
+        let db, auth, userId;
+        let foodHistory = [];
+
+        // --- Firebase Initialization ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'ai-calorie-tracker';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        
+        async function initializeFirebase() {
+            if (!firebaseConfig) {
+                showError("Firebase not configured. History and saving will be disabled, but you can still analyze images.");
+                // Gracefully hide Firebase-dependent UI
+                dailyTotalContainer.style.display = 'none';
+                historyContainer.parentElement.style.display = 'none';
+                return;
+            }
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                handleAuthentication();
+            } catch (e) {
+                console.error("Firebase Init Error:", e);
+                showError("Could not initialize Firebase. Please check your connection and configuration.");
+            }
+        }
+
+        async function handleAuthentication() {
+             onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    loadHistoryFromFirestore(userId);
+                } else {
+                     // No user is signed in. Try to sign in.
+                     signIn();
+                }
+            });
+        }
+
+        async function signIn() {
+            try {
+                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch(e) {
+                 console.error("Authentication Error:", e);
+                 showError("Failed to authenticate with the service.");
+            }
+        }
+
+
+        // --- UI Logic ---
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorModal.style.display = 'flex';
+        }
+
+        closeModalButton.addEventListener('click', () => {
+            errorModal.style.display = 'none';
+        });
+
+        const showLoader = (show) => {
+            loader.style.display = show ? 'block' : 'none';
+        };
+
+        const resetUI = () => {
+            imagePreviewContainer.classList.add('hidden');
+            cameraContainer.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+            stopCameraStream();
+        };
+
+        // --- Image & Camera Handling ---
+        let stream = null;
+
+        function stopCameraStream() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+        }
+        
+        cameraButton.addEventListener('click', async () => {
+            resetUI();
+            cameraContainer.classList.remove('hidden');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                videoElement.srcObject = stream;
+            } catch (err) {
+                console.error("Camera Error:", err);
+                showError("Could not access the camera. Please ensure you have given permission and are not using it elsewhere.");
+                resetUI();
+            }
+        });
+
+        imageUpload.addEventListener('change', (event) => {
+            resetUI();
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.src = e.target.result;
+                    imagePreviewContainer.classList.remove('hidden');
+                    processImage(e.target.result.split(',')[1]);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        captureButton.addEventListener('click', () => {
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            const context = canvasElement.getContext('2d');
+            context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+            
+            const imageDataUrl = canvasElement.toDataURL('image/jpeg');
+            imagePreview.src = imageDataUrl;
+            imagePreviewContainer.classList.remove('hidden');
+            
+            stopCameraStream();
+            cameraContainer.classList.add('hidden');
+
+            processImage(imageDataUrl.split(',')[1]);
+        });
+
+        // --- Core Logic ---
+        function processImage(base64ImageData) {
+            resultContainer.classList.remove('hidden');
+            resultContent.innerHTML = '';
+            showLoader(true);
+            getCalorieInfo(base64ImageData);
+        }
+
+        async function getCalorieInfo(base64ImageData, retryCount = 0) {
+            const apiKey = ""; 
+            const model = "gemini-2.5-flash-preview-05-20";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+            const prompt = `Analyze the food in this image. Identify the primary food item, estimate the total calories, and provide a brief, one-sentence reasoning for the estimate based on visible ingredients and portion size. Respond ONLY with a valid JSON object in the format: {"foodName": "string", "calories": number, "reasoning": "string"}. Do not include any other text, markdown, or explanations outside of the JSON object.`;
+
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }
+                    ]
+                }]
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 429 && retryCount < 3) { // Too Many Requests
+                        const delay = Math.pow(2, retryCount) * 1000;
+                        console.warn(`Rate limited. Retrying in ${delay}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        return getCalorieInfo(base64ImageData, retryCount + 1);
+                    }
+                    const errorBody = await response.text();
+                    throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorBody}`);
+                }
+                
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (!text) {
+                     throw new Error("Invalid response structure from API.");
+                }
+
+                // Clean the response to ensure it's valid JSON
+                const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                let data;
+                try {
+                     data = JSON.parse(cleanedText);
+                } catch(e) {
+                    console.error("Failed to parse JSON response:", cleanedText);
+                    throw new Error("AI model returned an invalid format.");
+                }
+
+                displayResult(data);
+                if (db && userId) {
+                    await saveEntryToFirestore(data);
+                }
+
+            } catch (error) {
+                console.error('API Call failed:', error);
+                showError("Couldn't analyze the image. The AI model might be busy or the image couldn't be processed. Please try again.");
+                resultContainer.classList.add('hidden');
+            } finally {
+                showLoader(false);
+            }
+        }
+        
+        function displayResult(data) {
+            const { foodName, calories, reasoning } = data;
+            resultContent.innerHTML = `
+                <p class="text-xl font-semibold text-gray-800">${foodName}</p>
+                <p class="text-5xl font-bold text-blue-600 my-3">${Math.round(calories)}</p>
+                <p class="text-sm text-gray-500 italic">"${reasoning}"</p>
+            `;
+        }
+
+
+        // --- Firestore Database Logic ---
+        async function saveEntryToFirestore(entryData) {
+            if (!db || !userId) {
+                showError("Cannot save entry. Database connection not established.");
+                return;
+            }
+            try {
+                const entry = {
+                    ...entryData,
+                    userId: userId,
+                    createdAt: serverTimestamp()
+                };
+                const collectionPath = `/artifacts/${appId}/users/${userId}/foodEntries`;
+                await addDoc(collection(db, collectionPath), entry);
+            } catch (error) {
+                console.error("Error saving to Firestore:", error);
+                showError("There was a problem saving your meal entry.");
+            }
+        }
+        
+        function loadHistoryFromFirestore(currentUserId) {
+            if (!db || !currentUserId) return;
+            const collectionPath = `/artifacts/${appId}/users/${currentUserId}/foodEntries`;
+            const q = query(collection(db, collectionPath));
+
+            onSnapshot(q, (querySnapshot) => {
+                const entries = [];
+                querySnapshot.forEach((doc) => {
+                    entries.push({ id: doc.id, ...doc.data() });
+                });
+                 // Sort by date client-side
+                entries.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                foodHistory = entries;
+                updateHistoryUI();
+            }, (error) => {
+                console.error("Error listening to Firestore:", error);
+                showError("Could not load your history. Please check your connection.");
+            });
+        }
+        
+        function updateHistoryUI() {
+            if (foodHistory.length === 0) {
+                historyPlaceholder.classList.remove('hidden');
+                historyContainer.innerHTML = '';
+                historyContainer.appendChild(historyPlaceholder);
+                totalCalories.textContent = '0';
+                return;
+            }
+
+            historyPlaceholder.classList.add('hidden');
+            historyContainer.innerHTML = '';
+            
+            const today = new Date().toLocaleDateString();
+            let todaysTotal = 0;
+
+            const groupedByDate = foodHistory.reduce((acc, entry) => {
+                if (!entry.createdAt) return acc;
+                const dateStr = entry.createdAt.toDate().toLocaleDateString();
+                if (!acc[dateStr]) {
+                    acc[dateStr] = [];
+                }
+                acc[dateStr].push(entry);
+                return acc;
+            }, {});
+
+            for(const dateStr in groupedByDate) {
+                 const entries = groupedByDate[dateStr];
+                 const dayTotal = entries.reduce((sum, item) => sum + item.calories, 0);
+
+                if (dateStr === today) {
+                    todaysTotal = dayTotal;
+                }
+
+                const dateHeader = document.createElement('h3');
+                dateHeader.className = "font-bold text-lg mt-4 pt-2 border-t";
+                dateHeader.textContent = `${dateStr} (Total: ${Math.round(dayTotal)} kcal)`;
+                historyContainer.appendChild(dateHeader);
+
+                entries.forEach(entry => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-white p-3 rounded-lg shadow flex justify-between items-center';
+                    div.innerHTML = `
+                        <div>
+                            <p class="font-medium capitalize">${entry.foodName}</p>
+                            <p class="text-xs text-gray-500">${entry.createdAt.toDate().toLocaleTimeString()}</p>
+                        </div>
+                        <p class="font-bold text-lg text-blue-600">${Math.round(entry.calories)} kcal</p>
+                    `;
+                    historyContainer.appendChild(div);
+                });
+            }
+            totalCalories.textContent = Math.round(todaysTotal);
+        }
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', initializeFirebase);
+    </script>
+
+</body>
+</html>
+
